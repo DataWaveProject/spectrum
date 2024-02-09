@@ -9,7 +9,7 @@ spectrum [-h] [-o OUTPUT] [-t TRUNCATION] [-select VARIABLES] files [files ...]
   -h, --help            show this help message and exit 
   -o OUTPUT, --output OUTPUT
                         output file name
-  -t TRUNCATION, --truncation TRUNCATION
+  -t TRUNCATION, --truncation TRUNCATION, integer
                         triangular truncation
   -select VARIABLES, --variables VARIABLES
                         compute spectra for selected variables
