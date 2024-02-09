@@ -3,9 +3,9 @@
 
     A collection of functions to compute the cross-power spectrum of two sets of spherical
     harmonics coefficients clm1 and clm2. Total cross-power is defined as the integral of the
-    clm1 times the conjugate of clm2 over all space, divided by the area the functions span over
-    all angular orders as a function of spherical harmonic degree. If the mean of the functions
-    is zero, this is equivalent to the covariance of the two functions.
+    clm1 times the conjugate of clm2 over all the spherical harmonic orders as a function of
+    spherical harmonic degree. If the mean of the functions is zero, this is equivalent
+    to the covariance of the two functions.
 
     ------------------------------------------------------------------------------------------------
     Copyright (C) <2023>  <Yanmichel A. Morfa>
@@ -36,7 +36,7 @@ earth_radius = 6.3712e6  # Radius of Earth [m]
 
 _global_attrs = {'grid': 'spectral',
                  'source': 'git@github.com:deterministic-nonperiodic/SEBA.git',
-                 'institution': 'Max Planck Institute for Meteorology',
+                 'institution': 'Leibniz Institute of Atmospheric Physics',
                  'history': date.today().strftime('Created on %c'),
                  'Conventions': 'CF-1.6'}
 
@@ -53,9 +53,9 @@ def _parse_units(unit_str):
 
 def kappa_from_deg(ls, linear=False):
     """
-        Returns total horizontal wavenumber [radians / meter]
+        Returns total horizontal wavenumber [radians/meter]
         from spherical harmonics degree (ls) on the surface
-        of a sphere of radius Re using the Jeans formula.
+        of a sphere of radius Re using Jeans formula.
         κ = sqrt[l(l + 1)] / Re ~ l / Re  for l>>1
     """
     num = ls if linear else np.sqrt(ls * (ls + 1.0))
