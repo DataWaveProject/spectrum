@@ -15,7 +15,7 @@ setup(
     description='A Python package for computing power spectra '
                 'from CDO spherical harmonic coefficients.',
     author='Yanmichel A. Morfa',
-    author_email='yanmichel.morfa-avalos@mpimet.mpg.de',
+    author_email='morfa@iap-kborn.de',
     packages=['spectrum'],
     ext_modules=[Extension('numeric_tools',
                            sources=['fortran_source/numeric_tools.f90'])
