@@ -184,70 +184,71 @@ def convert_to_complex(dataset, dim='nc2'):
 
 def dataset_spectra(dataset, variables=None, truncation=None, convention='energy', dim_name='nsp'):
     """
-    Computes power/energy spectrum of all variables in dataset
+    Computes power/energy spectrum of selected variables in dataset.
 
-    :param dataset: xarray.Dataset,
-        A dataset containing the complex spectral coefficients of the variables
-    :param variables: list,
-        list of variables to analyze
-    :param truncation: int,
-        spectral truncation
-    :param convention: str,
-        option to compute 'energy' or 'power' spectrum
-    :param dim_name: str,
-        dimension along which to compute spectra
-    :return: xarray.Dataset,
-        A new dataset containing the spectrum of each variable in 'dataset'
+    Only variables that contain the spectral dimension ``dim_name`` (e.g., ``'nsp'``)
+    are eligible. Others (like bounds arrays) are ignored.
     """
+    # Determine eligible variables
+    eligible = [name for name, da in dataset.data_vars.items() if dim_name in da.dims]
+
     if variables is None:
-        variables = list(dataset.data_vars)
+        variables = eligible
     elif isinstance(variables, (list, tuple)):
-        variables = [variable for variable in variables if variable in dataset.data_vars]
+        # Keep only variables explicitly requested *and* eligible
+        variables = [v for v in variables if v in eligible]
     else:
         raise ValueError("Unknown type for 'variables', must be an iterable of strings")
 
     if not variables:
-        raise ValueError(f"Could not find variables {variables} in dataset")
+        raise ValueError(
+            f"No variables with dimension '{dim_name}' found to compute spectra. "
+            f"Eligible variables were: {eligible}"
+        )
 
     if truncation is None:
-        truncation = numeric_tools.truncation(dataset.dims[dim_name])
+        truncation = numeric_tools.truncation(dataset.sizes[dim_name])
 
     kappa_h = kappa_from_deg(np.arange(truncation, dtype=int))
 
     # save data units before computing spectrum
     var_units = {name: dataset[name].attrs.get("units") for name in variables}
 
-    dataset = xr.apply_ufunc(
+    dataset_out = xr.apply_ufunc(
         cross_spectrum,
         dataset[variables],
-        input_core_dims=[[dim_name, ]],  # dimension along which the spectrum is computed
-        output_core_dims=[['kappa']],  # new wavenumber dimension
-        exclude_dims={dim_name},  # dimensions allowed to change size.
+        input_core_dims=[[dim_name]],  # dimension along which the spectrum is computed
+        output_core_dims=[["kappa"]],  # new wavenumber dimension
+        exclude_dims={dim_name},  # dimensions allowed to change size
         kwargs=dict(convention=convention, lmax=truncation - 1, axis=-1),
         dask="parallelized",
         output_dtypes=[np.complex64],  # map outputs to complex, then convert to real
-        dask_gufunc_kwargs={'output_sizes': {'kappa': truncation}},
-        keep_attrs=True
+        dask_gufunc_kwargs={"output_sizes": {"kappa": truncation}},
+        keep_attrs=True,
+        on_missing_core_dim="drop",  # ignore vars lacking the core dim (safety net)
     )
 
     # assign new coordinate with horizontal wavenumber
-    dataset = dataset.astype(np.float64).assign_coords({"kappa": kappa_h})
+    dataset_out = dataset_out.astype(np.float64).assign_coords({"kappa": kappa_h})
 
     # recover and square units for all variables after calculation
     for name, units in var_units.items():
         if units:
             converted_units = _parse_units(units) ** 2
-            dataset[name].attrs['units'] = str(converted_units.units)
+            dataset_out[name].attrs["units"] = str(converted_units.units)
 
     # add attributes
-    dataset.attrs.update(_global_attrs)
-    dataset.attrs['truncation'] = f"TL{truncation - 1}"
+    dataset_out.attrs.update(_global_attrs)
+    dataset_out.attrs["truncation"] = f"TL{truncation - 1}"
 
-    dataset.kappa.attrs = {'standard_name': 'wavenumber',
-                           'long_name': 'horizontal wavenumber',
-                           'axis': 'X', 'units': 'm**-1'}
+    dataset_out.kappa.attrs = {
+        "standard_name": "wavenumber",
+        "long_name": "horizontal wavenumber",
+        "axis": "X",
+        "units": "m**-1",
+    }
 
-    return dataset.transpose(..., 'kappa')
+    return dataset_out.transpose(..., "kappa")
 
 
 def process_files(file_path, output_path, variables=None, truncation=None):
