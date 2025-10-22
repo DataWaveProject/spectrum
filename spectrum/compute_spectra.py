@@ -152,7 +152,8 @@ def convert_to_complex(dataset, dim='nc2'):
     Notes
     -----
     Works with NumPy and Dask-backed arrays. ``xarray.Dataset.reduce`` passes
-    ``axis`` as a *tuple* of integers; we handle that explicitly.
+    ``axis`` as a *tuple* of integers; we handle that explicitly. For variables
+    that **do not** contain ``dim``, we leave them unchanged.
     The size of ``dim`` must be exactly 2.
     """
 
@@ -164,8 +165,13 @@ def convert_to_complex(dataset, dim='nc2'):
         )
 
     def cast_complex(arr, axis=()):
-        # xarray passes axis as a tuple; dask.take expects an int
-        ax = axis[0] if isinstance(axis, tuple) else axis
+        # xarray passes axis as a tuple; if empty, this variable lacks `dim` → return unchanged
+        if isinstance(axis, tuple):
+            if len(axis) == 0:
+                return arr
+            ax = axis[0]
+        else:
+            ax = axis
         real = np.take(arr, 0, axis=ax)
         imag = np.take(arr, 1, axis=ax)
         return real + 1j * imag
