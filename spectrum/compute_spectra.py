@@ -36,7 +36,7 @@ import xarray as xr
 earth_radius = 6.3712e6  # Radius of Earth [m]
 
 _global_attrs = {
-    'grid': 'spectral',
+    'grid': 'spectral (spherical harmonic degrees)',
     'source': 'git@github.com:deterministic-nonperiodic/SEBA.git',
     'institution': 'Max Planck Institute for Meteorology',
     'history': date.today().strftime('Created on %c'),
