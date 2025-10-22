@@ -244,10 +244,18 @@ def dataset_spectra(dataset, variables=None, truncation=None, convention='energy
 
     # recover and square units for all variables after calculation
     for name, units in var_units.items():
+        # Update units → squared
         if units:
             converted_units = _parse_units(units) ** 2
             dataset_out[name].attrs["units"] = str(converted_units.units)
-
+   
+        # Add suffix to long_name and standard_name if present
+        for key in ("long_name", "standard_name"):
+            val = dataset[name].attrs.get(key)
+            if isinstance(val, str) and val:
+                name_meta = f"{val}_spectrum" if "standard" in key else f"{val} spectrum"
+                dataset_out[name].attrs[key] = name_meta
+   
     # add attributes
     dataset_out.attrs.update(_global_attrs)
     dataset_out.attrs["truncation"] = f"TL{truncation - 1}"
