@@ -24,6 +24,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import logging
 import re
 from datetime import date
 
@@ -34,11 +35,13 @@ import xarray as xr
 
 earth_radius = 6.3712e6  # Radius of Earth [m]
 
-_global_attrs = {'grid': 'spectral',
-                 'source': 'git@github.com:deterministic-nonperiodic/SEBA.git',
-                 'institution': 'Max Planck Institute for Meteorology',
-                 'history': date.today().strftime('Created on %c'),
-                 'Conventions': 'CF-1.6'}
+_global_attrs = {
+    'grid': 'spectral',
+    'source': 'git@github.com:deterministic-nonperiodic/SEBA.git',
+    'institution': 'Max Planck Institute for Meteorology',
+    'history': date.today().strftime('Created on %c'),
+    'Conventions': 'CF-1.6',
+}
 
 # Create a pint UnitRegistry object
 UNITS_REG = pint.UnitRegistry()
@@ -46,6 +49,8 @@ UNITS_REG = pint.UnitRegistry()
 # from Metpy
 cmd = re.compile(r'(?<=[A-Za-z)])(?![A-Za-z)])(?<![0-9\-][eE])(?<![0-9\-])(?=[0-9\-])')
 
+# module-level logger
+logger = logging.getLogger(__name__)
 
 def _parse_units(unit_str):
     return UNITS_REG(cmd.sub('**', unit_str))
@@ -174,7 +179,10 @@ def convert_to_complex(dataset, dim='nc2'):
     # Only convert data variables that actually have the complex-pair dimension
     vars_with_dim = [name for name, da in dataset.data_vars.items() if dim in da.dims]
     if not vars_with_dim:
+        logger.info("convert_to_complex: no data variables contain dim '%s' — nothing to convert.", dim)
         return dataset
+
+    logger.info("convert_to_complex: converting variables along dim '%s': %s", dim, vars_with_dim)
 
     converted = dataset[vars_with_dim].reduce(cast_complex, dim=dim, keep_attrs=True)
 
@@ -209,6 +217,9 @@ def dataset_spectra(dataset, variables=None, truncation=None, convention='energy
     if truncation is None:
         truncation = numeric_tools.truncation(dataset.sizes[dim_name])
 
+    logger.info("dataset_spectra: computing '%s' spectrum for variables: %s (truncation=%s)",
+                convention, variables, truncation)
+   
     kappa_h = kappa_from_deg(np.arange(truncation, dtype=int))
 
     # save data units before computing spectrum
@@ -258,6 +269,8 @@ def process_files(file_path, output_path, variables=None, truncation=None):
         else:
             raise ValueError("Variables must be a string of comma-separated variable names.")
 
+    logger.info("Opening dataset(s): %s", file_path)
+
     # open dataset from files
     dataset = xr.open_mfdataset(file_path)
 
@@ -269,6 +282,8 @@ def process_files(file_path, output_path, variables=None, truncation=None):
     dataset = dataset_spectra(dataset, variables=variables,
                               truncation=truncation,
                               convention='power')
+
+    logger.info("Writing spectra to: %s", output_path)
 
     # export to netcdf file
     dataset.to_netcdf(output_path)
@@ -282,8 +297,17 @@ def main():
     parser.add_argument("-o", "--output", help="output file name")
     parser.add_argument("-t", "--truncation", type=int, help="triangular truncation")
     parser.add_argument("-select", "--variables", help="compute spectra of these variables")
+    parser.add_argument("--log-level", default="INFO",
+                        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
+                        help="Logging verbosity (default: INFO)")
 
     args = parser.parse_args()
+
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(levelname)s:%(name)s:%(message)s",
+    )
 
     # Compute power spectra and export to netcdf dataset 'output_path'
     process_files(args.files, output_path=args.output,
