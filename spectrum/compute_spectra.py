@@ -270,6 +270,21 @@ def dataset_spectra(dataset, variables=None, truncation=None, convention='energy
     return dataset_out.transpose(..., "kappa")
 
 
+def drop_cdi_grid_type(ds, vars_to_clean=None):
+    """Remove the 'CDI_grid_type' attribute from selected data variables (or all).
+    Returns a new Dataset with attributes removed.
+    """
+    if vars_to_clean is None:
+        vars_to_clean = list(ds.data_vars)
+    updates = {}
+    for name in vars_to_clean:
+        if "CDI_grid_type" in ds[name].attrs:
+            v = ds[name].copy()
+            v.attrs = {k: v.attrs[k] for k in v.attrs if k != "CDI_grid_type"}
+            updates[name] = v
+    return ds.assign(**updates)
+
+
 def process_files(file_path, output_path, variables=None, truncation=None):
     if variables is not None:
         if isinstance(variables, str):
@@ -285,7 +300,10 @@ def process_files(file_path, output_path, variables=None, truncation=None):
     # Cast dataset's variables to complex along dimension 'nc2' (consistent with CDO coefficients)
     dataset = convert_to_complex(dataset, dim='nc2')
 
-    # Compute power spectrum for all variables in the dataset up to a given truncation.
+    # Explicitly remove CDI_grid_type so downstream tools (e.g., CDO) don't infer spectral coeffs
+    dataset = drop_cdi_grid_type(dataset)
+
+    # Compute power spectrum for all variables in dataset up to a given truncation.
     # The default is nlat - 1, where nlat is the number of latitude points.
     dataset = dataset_spectra(dataset, variables=variables,
                               truncation=truncation,
