@@ -146,15 +146,10 @@ def cross_spectrum(clm1, clm2=None, lmax=None, convention='power', axis=0):
 
 
 def convert_to_complex(dataset, dim='nc2'):
-    """Converts all variables in a xarray dataset to complex by using the first
-    index along ``dim`` as the real part and the second as the imaginary part.
+    """Convert only data variables that *contain* ``dim`` from (real, imag) → complex.
 
-    Notes
-    -----
-    Works with NumPy and Dask-backed arrays. ``xarray.Dataset.reduce`` passes
-    ``axis`` as a *tuple* of integers; we handle that explicitly. For variables
-    that **do not** contain ``dim``, we leave them unchanged.
-    The size of ``dim`` must be exactly 2.
+    - Leaves coordinates and variables without ``dim`` unchanged (e.g., ``height_bnds``).
+    - Requires ``dim`` length to be exactly 2.
     """
 
     if dim not in dataset.dims:
@@ -165,7 +160,7 @@ def convert_to_complex(dataset, dim='nc2'):
         )
 
     def cast_complex(arr, axis=()):
-        # xarray passes axis as a tuple; if empty, this variable lacks `dim` → return unchanged
+        # xarray passes axis as a tuple for Dataset.reduce
         if isinstance(axis, tuple):
             if len(axis) == 0:
                 return arr
@@ -176,8 +171,15 @@ def convert_to_complex(dataset, dim='nc2'):
         imag = np.take(arr, 1, axis=ax)
         return real + 1j * imag
 
-    # take the real and imaginary parts of spectral coefficients
-    return dataset.reduce(cast_complex, dim=dim, keep_attrs=True)
+    # Only convert data variables that actually have the complex-pair dimension
+    vars_with_dim = [name for name, da in dataset.data_vars.items() if dim in da.dims]
+    if not vars_with_dim:
+        return dataset
+
+    converted = dataset[vars_with_dim].reduce(cast_complex, dim=dim, keep_attrs=True)
+
+    # Reassign converted variables back into the original dataset (others unchanged)
+    return dataset.assign(**{name: converted[name] for name in vars_with_dim})
 
 
 def dataset_spectra(dataset, variables=None, truncation=None, convention='energy', dim_name='nsp'):
