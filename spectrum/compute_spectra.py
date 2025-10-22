@@ -3,9 +3,9 @@
 
     A collection of functions to compute the cross-power spectrum of two sets of spherical
     harmonics coefficients clm1 and clm2. Total cross-power is defined as the integral of the
-    clm1 times the conjugate of clm2 over all the spherical harmonic orders as a function of
-    spherical harmonic degree. If the mean of the functions is zero, this is equivalent
-    to the covariance of the two functions.
+    clm1 times the conjugate of clm2 over all space, divided by the area the functions span over
+    all angular orders as a function of spherical harmonic degree. If the mean of the functions
+    is zero, this is equivalent to the covariance of the two functions.
 
     ------------------------------------------------------------------------------------------------
     Copyright (C) <2023>  <Yanmichel A. Morfa>
@@ -36,7 +36,7 @@ earth_radius = 6.3712e6  # Radius of Earth [m]
 
 _global_attrs = {'grid': 'spectral',
                  'source': 'git@github.com:deterministic-nonperiodic/SEBA.git',
-                 'institution': 'Leibniz Institute of Atmospheric Physics',
+                 'institution': 'Max Planck Institute for Meteorology',
                  'history': date.today().strftime('Created on %c'),
                  'Conventions': 'CF-1.6'}
 
@@ -53,9 +53,9 @@ def _parse_units(unit_str):
 
 def kappa_from_deg(ls, linear=False):
     """
-        Returns total horizontal wavenumber [radians/meter]
+        Returns total horizontal wavenumber [radians / meter]
         from spherical harmonics degree (ls) on the surface
-        of a sphere of radius Re using Jeans formula.
+        of a sphere of radius Re using the Jeans formula.
         κ = sqrt[l(l + 1)] / Re ~ l / Re  for l>>1
     """
     num = ls if linear else np.sqrt(ls * (ls + 1.0))
@@ -147,27 +147,28 @@ def cross_spectrum(clm1, clm2=None, lmax=None, convention='power', axis=0):
 
 def convert_to_complex(dataset, dim='nc2'):
     """Converts all variables in a xarray dataset to complex by using the first
-    index along 'nc2' as the real part and the second as the imaginary part.
+    index along ``dim`` as the real part and the second as the imaginary part.
 
-    Parameters
-    ----------
-    dataset : xarray.Dataset
-        The dataset to convert to complex.
-    dim : str,
-        dimension along which to merge
-
-    Returns
-    -------
-    xarray.Dataset
-        The converted dataset.
+    Notes
+    -----
+    Works with NumPy and Dask-backed arrays. ``xarray.Dataset.reduce`` passes
+    ``axis`` as a *tuple* of integers; we handle that explicitly.
+    The size of ``dim`` must be exactly 2.
     """
 
-    # cast array to complex along an axis with dimension 2. The first index correspond to
-    # the real part and the second index to the imaginary part in the resulting array.
-    def cast_complex(arr, axis=0):
-        res = 1j * np.take(arr, 1, axis=axis)
-        res += np.take(arr, 0, axis=axis)
-        return res
+    if dim not in dataset.dims:
+        raise ValueError(f"Dimension '{dim}' not found in dataset dims: {list(dataset.dims)}")
+    if int(dataset.sizes[dim]) != 2:
+        raise ValueError(
+            f"Dimension '{dim}' must have length 2 (real, imag). Got size={dataset.sizes[dim]}"
+        )
+
+    def cast_complex(arr, axis=()):
+        # xarray passes axis as a tuple; dask.take expects an int
+        ax = axis[0] if isinstance(axis, tuple) else axis
+        real = np.take(arr, 0, axis=ax)
+        imag = np.take(arr, 1, axis=ax)
+        return real + 1j * imag
 
     # take the real and imaginary parts of spectral coefficients
     return dataset.reduce(cast_complex, dim=dim, keep_attrs=True)
@@ -254,7 +255,7 @@ def process_files(file_path, output_path, variables=None, truncation=None):
     # Cast dataset's variables to complex along dimension 'nc2' (consistent with CDO coefficients)
     dataset = convert_to_complex(dataset, dim='nc2')
 
-    # Compute power spectrum for all variables in dataset up to a given truncation.
+    # Compute power spectrum for all variables in the dataset up to a given truncation.
     # The default is nlat - 1, where nlat is the number of latitude points.
     dataset = dataset_spectra(dataset, variables=variables,
                               truncation=truncation,
