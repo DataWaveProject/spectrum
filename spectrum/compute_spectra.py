@@ -264,7 +264,7 @@ def dataset_spectra(dataset, variables=None, truncation=None, convention='energy
         "standard_name": "wavenumber",
         "long_name": "horizontal wavenumber",
         "axis": "X",
-        "units": "m**-1",
+        "units": "rad m**-1",
     }
 
     return dataset_out.transpose(..., "kappa")
